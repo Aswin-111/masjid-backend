@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Admin from "../model/admin.model.js";
 import Masjid from "../model/masjid.model.js";
 import Member from "../model/member.model.js";
@@ -44,6 +45,7 @@ const AdminController = {
 
       res.json({ message: "Masjid created successfully" });
     } catch (error) {
+      console.log(error);
       return res.status(500).json({ message: "Something went wrong", error });
     }
   },
@@ -192,6 +194,158 @@ const AdminController = {
       });
     } catch (error) {
       return res.status(500).json({ message: "Something went wrong", error });
+    }
+  },
+  getEditMasjidData: async (req, res) => {
+    try {
+      const masjids = await Masjid.find();
+      res.json(masjids);
+    } catch (err) {
+      res.status(500).json({ message: "Server error", error: err.message });
+    }
+  },
+  updateMasjid: async (req, res) => {
+    const { id } = req.params;
+
+    console.log(id);
+    try {
+      const existingMasjid = await Masjid.findById(id);
+      if (!existingMasjid) {
+        return res.status(404).json({ message: "Masjid not found" });
+      }
+
+      // Update only if a value is provided; else retain existing
+      existingMasjid.masjid_name =
+        req.body.masjid_name || existingMasjid.masjid_name;
+      existingMasjid.address = req.body.address || existingMasjid.address;
+      existingMasjid.phone_number =
+        req.body.phone_number || existingMasjid.phone_number;
+
+      const updatedMasjid = await existingMasjid.save();
+      res.json(updatedMasjid);
+    } catch (err) {
+      res.status(500).json({ message: "Update failed", error: err.message });
+    }
+  },
+  deleteMasjid: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check if masjid exists
+      const masjid = await Masjid.findById(id);
+      if (!masjid) {
+        return res.status(404).json({ message: "Masjid not found" });
+      }
+
+      // Delete related roles
+      await Role.deleteMany({ masjid_id: id });
+
+      // Delete related members
+      await Member.deleteMany({ masjid_id: id });
+
+      // Delete masjid itself
+      await Masjid.findByIdAndDelete(id);
+
+      res
+        .status(200)
+        .json({ message: "Masjid and related data deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting masjid:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  },
+  getEditMemberData: async (req, res) => {
+    try {
+      const { masjid_id } = req.query;
+      console.log(masjid_id);
+      const filter = masjid_id ? { masjid_id } : {};
+
+      const members = await Member.find(filter);
+      console.log(members);
+      return res.status(200).json({
+        success: true,
+        members,
+      });
+    } catch (error) {
+      console.error("Error fetching members:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch members",
+      });
+    }
+  },
+  editMemberData: async (req, res) => {
+    try {
+      const { id } = req.query;
+
+      // Fetch existing member
+      const existingMember = await Member.findById(id);
+      if (!existingMember) {
+        return res.status(404).json({
+          success: false,
+          message: "Member not found",
+        });
+      }
+
+      // Merge existing data with new data (only update fields that are provided)
+      const updatedData = {
+        name: req.body.name || existingMember.name,
+        email: req.body.email || existingMember.email,
+        phone: req.body.phone || existingMember.phone,
+        address: req.body.address || existingMember.address,
+        role: req.body.role || existingMember.role,
+        // Add other fields as necessary
+      };
+
+      // Save updated member
+      const updatedMember = await Member.findByIdAndUpdate(id, updatedData, {
+        new: true,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Member data updated successfully",
+        data: updatedMember,
+      });
+    } catch (error) {
+      console.error("Error updating member data:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update member data",
+      });
+    }
+  },
+  getEditMemberDataById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const ObjectId = mongoose.Types.ObjectId;
+
+      // ✅ First, check if the member exists
+      const member = await Member.findById(id);
+
+      if (!member) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+
+      // ✅ Safe to log now
+      console.log("member.masjid_id:", member.masjid_id.toString());
+      console.log("expected:", "682c1c48347ec3935d529b76");
+      console.log(
+        "equal:",
+        member.masjid_id.toString() === "682c1c48347ec3935d529b76"
+      );
+
+      // ✅ Query all roles with this masjid_id
+      const roles = await Role.find({
+        masjid_id: member.masjid_id, // Already an ObjectId
+      });
+
+      console.log(roles);
+
+      res.json({ member_data: member, roles });
+    } catch (error) {
+      console.error("Error fetching member by ID:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   },
 };
